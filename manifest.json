@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "OpenPhone Activity Downloader",
+  "version": "1.0",
+  "description": "Download OpenPhone activity data with one click",
+  "permissions": [
+    "downloads",
+    "notifications",
+    "storage",
+    "tabs",
+    "cookies",
+    "scripting",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://communication.openphoneapi.com/*",
+    "https://*.openphoneapi.com/*",
+    "https://ai.openphoneapi.com/*",
+    "https://my.quo.com/*",
+    "https://*.quo.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "OpenPhone Activity Downloader"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}

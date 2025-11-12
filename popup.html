@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+    }
+    h3 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    input:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: monospace;
+      box-sizing: border-box;
+      resize: vertical;
+      min-height: 60px;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #4285f4;
+    }
+    .button-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-download {
+      background-color: #34a853;
+      color: white;
+    }
+    .btn-download:hover:not(:disabled) {
+      background-color: #2d8f47;
+    }
+    .btn-fetch {
+      background-color: #4285f4;
+      color: white;
+    }
+    .btn-fetch:hover:not(:disabled) {
+      background-color: #357ae8;
+    }
+    .btn-create-job {
+      background-color: #9c27b0;
+      color: white;
+    }
+    .btn-create-job:hover:not(:disabled) {
+      background-color: #7b1fa2;
+    }
+    .status {
+      margin-top: 12px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: none;
+    }
+    .status.success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      display: block;
+    }
+    .status.error {
+      background-color: #ffebee;
+      color: #c62828;
+      display: block;
+    }
+    .status.loading {
+      background-color: #e3f2fd;
+      color: #1976d2;
+      display: block;
+    }
+    .token-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+    .token-section label {
+      font-size: 11px;
+      color: #999;
+    }
+    .help-text {
+      font-size: 10px;
+      color: #666;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .help-text a {
+      color: #4285f4;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h3>OpenPhone Activity</h3>
+  
+  <div class="form-group">
+    <label for="conversationId">Conversation ID</label>
+    <input type="text" id="conversationId" placeholder="CN115a0a2e031e4379add8fed4c374d9cc" value="CN115a0a2e031e4379add8fed4c374d9cc">
+  </div>
+  
+  <div class="form-group">
+    <label for="last">Last (count)</label>
+    <input type="number" id="last" placeholder="51" value="51" min="1">
+  </div>
+  
+  <div class="token-section">
+    <label for="authToken">Authorization Token</label>
+    <textarea id="authToken" placeholder="Paste your authorization token here..."></textarea>
+    <div class="help-text">
+      Token is automatically captured from cookies/storage when you click buttons. 
+      <br>Or manually: Open DevTools → Network → Find activity request → Copy "authorization" header value
+    </div>
+  </div>
+  
+  <div class="button-group">
+    <button id="btnDownload" class="btn-download">Download JSON</button>
+    <button id="btnFetch" class="btn-fetch">Fetch & Show</button>
+  </div>
+  
+  <div class="button-group" style="margin-top: 8px;">
+    <button id="btnCreateJob" class="btn-create-job" style="flex: 1;">Create Job</button>
+  </div>
+  
+  <div id="status" class="status"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

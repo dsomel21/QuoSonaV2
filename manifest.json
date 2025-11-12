@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OpenPhone Activity Downloader",
+  "name": "QuoSonaV2",
   "version": "1.0",
-  "description": "Download OpenPhone activity data with one click",
+  "description": "Help Quo users build Jobs for SONA by extracting conversation transcripts",
   "permissions": [
     "downloads",
     "notifications",
@@ -21,7 +21,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "OpenPhone Activity Downloader"
+    "default_title": "QuoSonaV2 - Extract transcripts and create SONA jobs"
   },
   "background": {
     "service_worker": "background.js"

@@ -6,13 +6,18 @@ const authTokenInput = document.getElementById('authToken');
 const btnDownload = document.getElementById('btnDownload');
 const btnFetch = document.getElementById('btnFetch');
 const btnCreateJob = document.getElementById('btnCreateJob');
+const btnSettings = document.getElementById('btnSettings');
+const btnSaveSettings = document.getElementById('btnSaveSettings');
+const settingsSection = document.getElementById('settingsSection');
+const openaiApiKeyInput = document.getElementById('openaiApiKey');
 const statusDiv = document.getElementById('status');
+const responseDisplay = document.getElementById('responseDisplay');
 
 // Default token (will be replaced by saved value)
 const DEFAULT_TOKEN = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImhFVk1YenFXbk10c2RfOVJQVTV2QSJ9.eyJpbnRlcm5hbF91c2VyX2lkIjoiVVNTVDVreUZhZCIsImludGVybmFsX29yZ19pZCI6Ik9SWEppc1BCTFkiLCJpbnRlcm5hbF9vcmdfcm9sZSI6Im93bmVyIiwiZW1haWwiOiJkc29tZWwyMUBnbWFpbC5jb20iLCJpc3MiOiJodHRwczovL3NpZ25pbi5vcGVucGhvbmUuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTE3NTY5ODc1ODY1OTM2ODM5Mzg4IiwiYXVkIjpbImh0dHBzOi8vKi5vcGVucGhvbmVhcGkuY29tIiwiaHR0cHM6Ly9vcGVucGhvbmUuYXV0aDAuY29tL3VzZXJpbmZvIl0sImlhdCI6MTc2Mjk3NDc4MiwiZXhwIjoxNzYyOTc4MzgyLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIG9mZmxpbmVfYWNjZXNzIiwiYXpwIjoiUjBHOWRMd01EWGdqR0hpOWNFTVVIb2VZang0TnNoWWYiLCJwZXJtaXNzaW9ucyI6W119.VzZGUG_chDIjpll5fQuFoAC0So_iC-D3dpCHbHdCPU6E68UxzReZUYAuwSjedeXOvThf5btgPWpeAyFKYF9jC4lEvpe5bdVUP3dP4Un26gQ9LkAxffgbPYfy2ffu0AqM5ZqZoVlf615PUa9cpYBbLNxVDLYU9z9YAvI-12wGYWgRTQ3uYsoEgR-10LXyVPntUPDX70SELEmJlNvYT3IZo4e_Lqj88YHio1o4XEKgY98Tnugy-zyepNfPPgZoqjgloJXFSAX8274UwKsrTU5yOtuwE812IvstXZ7hfunhstovQlqGR66pV081WkFrYtz3uwQ_CYwpbmc9gd2AFWEcGA';
 
 // Load saved values
-chrome.storage.local.get(['conversationId', 'last', 'authToken'], (result) => {
+chrome.storage.local.get(['conversationId', 'last', 'authToken', 'openaiApiKey'], (result) => {
   if (result.conversationId) {
     conversationIdInput.value = result.conversationId;
   }
@@ -24,6 +29,9 @@ chrome.storage.local.get(['conversationId', 'last', 'authToken'], (result) => {
   } else {
     // Use default token if none saved
     authTokenInput.value = DEFAULT_TOKEN;
+  }
+  if (result.openaiApiKey) {
+    openaiApiKeyInput.value = result.openaiApiKey;
   }
 });
 
@@ -39,6 +47,40 @@ lastInput.addEventListener('change', () => {
 authTokenInput.addEventListener('change', () => {
   chrome.storage.local.set({ authToken: authTokenInput.value });
 });
+
+// Settings toggle
+btnSettings.addEventListener('click', () => {
+  const isVisible = settingsSection.style.display !== 'none';
+  settingsSection.style.display = isVisible ? 'none' : 'block';
+});
+
+// Save settings
+btnSaveSettings.addEventListener('click', () => {
+  const apiKey = openaiApiKeyInput.value.trim();
+  chrome.storage.local.set({ openaiApiKey: apiKey }, () => {
+    showStatus('Settings saved!', 'success');
+    setTimeout(() => {
+      settingsSection.style.display = 'none';
+    }, 1500);
+  });
+});
+
+// Show response display
+function showResponse(data, title = 'Response') {
+  const existing = responseDisplay.textContent;
+  const newContent = `${title}:\n\n${JSON.stringify(data, null, 2)}`;
+  if (existing) {
+    responseDisplay.textContent = `${existing}\n\n${'='.repeat(50)}\n\n${newContent}`;
+  } else {
+    responseDisplay.textContent = newContent;
+  }
+  responseDisplay.classList.add('show');
+}
+
+// Hide response display
+function hideResponse() {
+  responseDisplay.classList.remove('show');
+}
 
 // Listen for token updates from background script (network interception)
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -380,77 +422,149 @@ btnCreateJob.addEventListener('click', async () => {
     return;
   }
   
-  // Try to refresh token automatically before making request
-  showStatus('Checking for fresh token...', 'loading');
-  const tokenUpdated = await tryUpdateToken();
-  if (tokenUpdated) {
-    authToken = authTokenInput.value.trim();
+  // Check for OpenAI API key
+  const stored = await chrome.storage.local.get(['openaiApiKey']);
+  const openaiApiKey = stored.openaiApiKey;
+  
+  if (!openaiApiKey || !openaiApiKey.trim()) {
+    showStatus('Please add your OpenAI API key in Settings', 'error');
+    settingsSection.style.display = 'block';
+    return;
   }
   
-  const url = 'https://ai.openphoneapi.com/v1/agent-job-definitions';
-  
-  // Job definition body (as provided)
-  const jobBody = {
-    "name": "Call routing",
-    "description": "Used to determine the caller's needs and connect them to the right team.",
-    "trigger": "After greeting the caller",
-    "instructions": "* Let the caller know you can help route their call.\n\n* Ask the caller if they're looking for sales, support, or another department.",
-    "emoji": "🔀",
-    "actions": [],
-    "markdownEditorSchema": [
-      {
-        "id": "6cb3ef7d-8562-47cb-8407-ac1ff3f9350c",
-        "type": "bulletListItem",
-        "props": {
-          "backgroundColor": "default",
-          "textColor": "default",
-          "textAlignment": "left"
-        },
-        "content": [
-          {
-            "type": "text",
-            "text": "Let the caller know you can help route their call.",
-            "styles": {}
-          }
-        ],
-        "children": []
-      },
-      {
-        "id": "f4c759bc-021d-4f93-a7b1-cae26a23d921",
-        "type": "bulletListItem",
-        "props": {
-          "backgroundColor": "default",
-          "textColor": "default",
-          "textAlignment": "left"
-        },
-        "content": [
-          {
-            "type": "text",
-            "text": "Ask the caller if they're looking for sales, support, or another department.",
-            "styles": {}
-          }
-        ],
-        "children": []
-      },
-      {
-        "id": "1bebd0f4-135c-4cac-aaa8-567f3d8e71ef",
-        "type": "paragraph",
-        "props": {
-          "backgroundColor": "default",
-          "textColor": "default",
-          "textAlignment": "left"
-        },
-        "content": [],
-        "children": []
-      }
-    ]
-  };
-  
   try {
-    showStatus('Creating job...', 'loading');
+    hideResponse();
+    showStatus('Fetching conversation transcript...', 'loading');
     setButtonsEnabled(false);
     
-    // Get dynamic headers with fresh token
+    // Step 1: Fetch conversation data
+    const conversationData = await fetchActivity();
+    if (!conversationData) {
+      showStatus('Failed to fetch conversation data', 'error');
+      return;
+    }
+    
+    // Step 2: Call OpenAI to generate job definition
+    showStatus('Analyzing transcript with OpenAI...', 'loading');
+    
+    const openaiPrompt = `Look at this call transcript.
+
+${JSON.stringify(conversationData, null, 2)}
+
+Do you think you can try and extract out the intent of the call and if you believe this is something that can be "jobified", then we should Jobify it. This is the documentation for jobs in Sona:
+
+How Sona jobs work
+
+Job architecture
+Job structure:
+Job library: Your entire collection of jobs, available to all Sona steps across the workspace
+Jobs: Step-by-step instruction that guide how Sona should respond to callers in specific scenarios
+Job limits and fields:
+You can attach up to 10 jobs per Sona step
+You can create unlimited jobs in your workspace
+Each job contains:
+Name (100 characters)
+Description (optional, 500 characters)
+Trigger (caller intent, up to 500 characters)
+Instructions (step-by-step guidance, up to 10,000 characters)
+
+----
+
+THIS IS THE INFORMATION I NEED FOR A JOB
+
+Job Name
+Description...
+
+Trigger
+Describe what the caller says or asks for what should trigger this job.
+Example The caller wants to schedule, reschedule, or cancel an appointment
+
+Instructions
+
+Describe how Sona should navigate this job, as if you're guiding a real person. Use clear, step-by-step language.
+
+I need in this following format:
+
+Can you give me this information in the following format in a JSON:
+- emoji (with a single character emoji)
+- name (a basic string, max 100 characters)
+- description (optional string, max 500 characters, use \\n for line breaks)
+- trigger (a string describing caller intent, max 500 characters)
+- instructions (Markdown format with line breaks, max 10,000 characters - this will be the long one)
+
+Return only valid JSON. Do not include any markdown code blocks or extra text. The JSON will be used directly as the body of an HTTP request.`;
+
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey.trim()}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: openaiPrompt
+          }
+        ],
+        temperature: 0.7,
+        response_format: { type: 'json_object' }
+      })
+    });
+    
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text();
+      let errorMessage = `OpenAI API error: ${openaiResponse.status}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.error?.message) {
+          errorMessage = `OpenAI: ${errorJson.error.message}`;
+        }
+      } catch (e) {
+        errorMessage += ` - ${errorText.substring(0, 100)}`;
+      }
+      throw new Error(errorMessage);
+    }
+    
+    const openaiData = await openaiResponse.json();
+    const openaiContent = openaiData.choices?.[0]?.message?.content;
+    
+    if (!openaiContent) {
+      throw new Error('No content returned from OpenAI');
+    }
+    
+    // Parse OpenAI JSON response
+    let jobBody;
+    try {
+      jobBody = JSON.parse(openaiContent);
+    } catch (e) {
+      // Try to extract JSON from markdown code blocks
+      const jsonMatch = openaiContent.match(/```json\s*([\s\S]*?)\s*```/) || openaiContent.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jobBody = JSON.parse(jsonMatch[1]);
+      } else {
+        throw new Error('Could not parse JSON from OpenAI response');
+      }
+    }
+    
+    // Show OpenAI response
+    showResponse(openaiData, 'OpenAI Response');
+    
+    // Validate required fields
+    if (!jobBody.emoji || !jobBody.name || !jobBody.trigger || !jobBody.instructions) {
+      throw new Error('OpenAI response missing required fields (emoji, name, trigger, instructions). Got: ' + JSON.stringify(Object.keys(jobBody)));
+    }
+    
+    // Ensure description exists (even if empty)
+    if (!jobBody.description) {
+      jobBody.description = '';
+    }
+    
+    // Step 3: Create job with OpenAI-generated definition
+    showStatus('Creating job with AI-generated definition...', 'loading');
+    
+    const url = 'https://ai.openphoneapi.com/v1/agent-job-definitions';
     const headers = getDynamicHeaders(authToken);
     
     const response = await fetch(url, {
@@ -486,7 +600,7 @@ btnCreateJob.addEventListener('click', async () => {
       throw new Error(errorMessage);
     }
     
-    const data = await response.json();
+    const jobData = await response.json();
     
     // After successful request, check if token was updated
     const storedToken = await chrome.storage.local.get(['authToken']);
@@ -496,14 +610,17 @@ btnCreateJob.addEventListener('click', async () => {
     }
     
     // Show success message with job details
-    const jobName = data.name || data.id || 'Job';
-    const jobId = data.id || 'unknown';
+    const jobId = jobData.id || 'unknown';
     showStatus(`✅ Job created successfully! ID: ${jobId}`, 'success');
     
-    // Log full response for debugging
-    console.log('Job created:', data);
+    // Show job creation response
+    showResponse(jobData, 'Job Created');
     
-    return data;
+    // Log full response for debugging
+    console.log('Job created:', jobData);
+    console.log('OpenAI response:', openaiData);
+    
+    return jobData;
     
   } catch (error) {
     console.error('Create job error:', error);
@@ -519,6 +636,7 @@ btnCreateJob.addEventListener('click', async () => {
     }
     
     showStatus(`❌ Error: ${error.message}`, 'error');
+    showResponse({ error: error.message }, 'Error');
     return null;
   } finally {
     setButtonsEnabled(true);

@@ -132,10 +132,43 @@
       color: #4285f4;
       text-decoration: none;
     }
+    .response-display {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 11px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      display: none;
+    }
+    .response-display.show {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <h3>OpenPhone Activity</h3>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <h3 style="margin: 0;">OpenPhone Activity</h3>
+    <button id="btnSettings" style="background: none; border: none; color: #666; cursor: pointer; font-size: 20px; padding: 4px 8px;" title="Settings">⚙️</button>
+  </div>
+  
+  <!-- Settings Section -->
+  <div id="settingsSection" style="display: none; margin-bottom: 16px; padding: 12px; background: #f5f5f5; border-radius: 4px;">
+    <h4 style="margin: 0 0 8px 0; font-size: 14px;">Settings</h4>
+    <div class="form-group">
+      <label for="openaiApiKey">OpenAI API Key</label>
+      <input type="password" id="openaiApiKey" placeholder="sk-..." style="font-size: 12px;">
+      <div class="help-text" style="margin-top: 4px;">
+        Your API key is stored locally and used to generate job definitions from transcripts.
+      </div>
+    </div>
+    <button id="btnSaveSettings" style="width: 100%; padding: 8px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save Settings</button>
+  </div>
   
   <div class="form-group">
     <label for="conversationId">Conversation ID</label>
@@ -166,6 +199,7 @@
   </div>
   
   <div id="status" class="status"></div>
+  <div id="responseDisplay" class="response-display"></div>
   
   <script src="popup.js"></script>
 </body>

@@ -16,6 +16,7 @@
     "https://communication.openphoneapi.com/*",
     "https://*.openphoneapi.com/*",
     "https://ai.openphoneapi.com/*",
+    "https://api.openai.com/*",
     "https://my.quo.com/*",
     "https://*.quo.com/*"
   ],

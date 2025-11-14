@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "QuoSonaV2",
+  "name": "QuoJobBuilderExtension",
   "version": "1.0",
   "description": "Help Quo users build Jobs for SONA by extracting conversation transcripts",
   "permissions": [
@@ -22,7 +22,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "QuoSonaV2 - Extract transcripts and create SONA jobs"
+    "default_title": "QuoJobBuilderExtension - Extract transcripts and create SONA jobs"
   },
   "background": {
     "service_worker": "background.js"

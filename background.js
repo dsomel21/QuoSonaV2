@@ -1,6 +1,6 @@
-// OpenPhone Activity Downloader - Background Script
+// QuoJobBuilderExtension - Background Script
 
-console.log('OpenPhone Downloader extension loaded');
+console.log('QuoJobBuilderExtension loaded');
 
 // Intercept network requests to capture authorization tokens
 chrome.webRequest.onBeforeSendHeaders.addListener(
@@ -200,7 +200,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     const dataUrl = 'data:application/json;charset=utf-8,' + encodeURIComponent(jsonString);
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `openphone-activity-${conversationId}-${timestamp}.json`;
+    const filename = `quo-activity-${conversationId}-${timestamp}.json`;
     
     // Check if data URL is too large (Chrome has ~2MB limit for data URLs)
     if (dataUrl.length > 2000000) {
@@ -252,7 +252,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      title: 'OpenPhone Downloader Error',
+      title: 'QuoJobBuilderExtension Error',
       message: error.message || 'Unknown error occurred. Check console for details.'
     });
     

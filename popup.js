@@ -1,4 +1,4 @@
-// Popup script for OpenPhone Activity Downloader
+// QuoJobBuilderExtension - Popup Script
 
 const conversationIdInput = document.getElementById('conversationId');
 const lastInput = document.getElementById('last');
@@ -12,6 +12,25 @@ const settingsSection = document.getElementById('settingsSection');
 const openaiApiKeyInput = document.getElementById('openaiApiKey');
 const statusDiv = document.getElementById('status');
 const responseDisplay = document.getElementById('responseDisplay');
+const testingSection = document.getElementById('testingSection');
+const testingStatus = document.getElementById('testingStatus');
+const pollingIndicator = document.getElementById('pollingIndicator');
+const pollingText = document.getElementById('pollingText');
+const resolutionButtons = document.getElementById('resolutionButtons');
+const btnResolvedYes = document.getElementById('btnResolvedYes');
+const btnResolvedNo = document.getElementById('btnResolvedNo');
+const btnStopPolling = document.getElementById('btnStopPolling');
+const feedbackSection = document.getElementById('feedbackSection');
+const feedbackText = document.getElementById('feedbackText');
+const btnSubmitFeedback = document.getElementById('btnSubmitFeedback');
+
+// Polling state
+let pollingInterval = null;
+let lastConversationId = null;
+let lastActivityId = null;
+let lastActivityTimestamp = null;
+let currentJobId = null;
+let originalConversationData = null;
 
 // Default token (will be replaced by saved value)
 const DEFAULT_TOKEN = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImhFVk1YenFXbk10c2RfOVJQVTV2QSJ9.eyJpbnRlcm5hbF91c2VyX2lkIjoiVVNTVDVreUZhZCIsImludGVybmFsX29yZ19pZCI6Ik9SWEppc1BCTFkiLCJpbnRlcm5hbF9vcmdfcm9sZSI6Im93bmVyIiwiZW1haWwiOiJkc29tZWwyMUBnbWFpbC5jb20iLCJpc3MiOiJodHRwczovL3NpZ25pbi5vcGVucGhvbmUuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTE3NTY5ODc1ODY1OTM2ODM5Mzg4IiwiYXVkIjpbImh0dHBzOi8vKi5vcGVucGhvbmVhcGkuY29tIiwiaHR0cHM6Ly9vcGVucGhvbmUuYXV0aDAuY29tL3VzZXJpbmZvIl0sImlhdCI6MTc2Mjk3NDc4MiwiZXhwIjoxNzYyOTc4MzgyLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIG9mZmxpbmVfYWNjZXNzIiwiYXpwIjoiUjBHOWRMd01EWGdqR0hpOWNFTVVIb2VZang0TnNoWWYiLCJwZXJtaXNzaW9ucyI6W119.VzZGUG_chDIjpll5fQuFoAC0So_iC-D3dpCHbHdCPU6E68UxzReZUYAuwSjedeXOvThf5btgPWpeAyFKYF9jC4lEvpe5bdVUP3dP4Un26gQ9LkAxffgbPYfy2ffu0AqM5ZqZoVlf615PUa9cpYBbLNxVDLYU9z9YAvI-12wGYWgRTQ3uYsoEgR-10LXyVPntUPDX70SELEmJlNvYT3IZo4e_Lqj88YHio1o4XEKgY98Tnugy-zyepNfPPgZoqjgloJXFSAX8274UwKsrTU5yOtuwE812IvstXZ7hfunhstovQlqGR66pV081WkFrYtz3uwQ_CYwpbmc9gd2AFWEcGA';
@@ -81,6 +100,387 @@ function showResponse(data, title = 'Response') {
 function hideResponse() {
   responseDisplay.classList.remove('show');
 }
+
+// Start testing flow
+function startTestingFlow(conversationId) {
+  testingSection.style.display = 'block';
+  pollingIndicator.innerHTML = '<span class="polling-dot"></span>';
+  pollingText.textContent = 'Initializing...';
+  resolutionButtons.style.display = 'none';
+  feedbackSection.style.display = 'none';
+  btnStopPolling.style.display = 'block';
+  
+  // Reset polling state
+  lastActivityTimestamp = null;
+  lastActivityId = null;
+  lastConversationId = conversationId;
+  
+  // Start polling for new conversations
+  startPolling();
+}
+
+// Start polling for new conversations
+function startPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+  }
+  
+  let isInitialized = false;
+  let pollCount = 0;
+  
+  // Initialize baseline on first poll
+  const initializeBaseline = async () => {
+    try {
+      pollingText.textContent = 'Setting baseline...';
+      const data = await fetchActivity();
+      
+      // Check conversation object for lastActivityId and lastActivityAt
+      if (data && data.conversation) {
+        const conv = data.conversation;
+        if (conv.lastActivityId) {
+          lastActivityId = conv.lastActivityId;
+        }
+        if (conv.lastActivityAt) {
+          lastActivityTimestamp = new Date(conv.lastActivityAt).getTime();
+        }
+        lastConversationId = conv.id || conversationIdInput.value.trim();
+      }
+      
+      // Also check the latest activity in result array
+      if (data && data.result && data.result.length > 0) {
+        const latestActivity = data.result[0];
+        
+        // Use activity ID as primary identifier
+        if (latestActivity.id && !lastActivityId) {
+          lastActivityId = latestActivity.id;
+        }
+        
+        // Use activity timestamp if conversation timestamp not available
+        const activityTimestamp = latestActivity.createdAt || latestActivity.created_at || latestActivity.timestamp;
+        if (activityTimestamp && !lastActivityTimestamp) {
+          lastActivityTimestamp = new Date(activityTimestamp).getTime();
+        }
+        
+        if (!lastConversationId) {
+          lastConversationId = latestActivity.conversationId || latestActivity.conversation_id || conversationIdInput.value.trim();
+        }
+      }
+      
+      // If still no baseline, use current time
+      if (!lastActivityTimestamp) {
+        lastActivityTimestamp = Date.now();
+      }
+      
+      isInitialized = true;
+      pollingText.textContent = 'Polling for new calls...';
+      console.log('Baseline set:', { 
+        lastActivityId, 
+        lastActivityTimestamp: new Date(lastActivityTimestamp).toISOString(),
+        convId: lastConversationId 
+      });
+    } catch (e) {
+      console.error('Error initializing baseline:', e);
+      pollingText.textContent = 'Error initializing. Retrying...';
+      isInitialized = true;
+    }
+  };
+  
+  // Initialize first
+  initializeBaseline();
+  
+  pollingInterval = setInterval(async () => {
+    try {
+      pollCount++;
+      
+      // Update polling indicator
+      if (pollCount % 2 === 0) {
+        pollingIndicator.innerHTML = '<span class="polling-dot"></span>';
+      } else {
+        pollingIndicator.innerHTML = '<span class="polling-dot" style="opacity: 0.5;"></span>';
+      }
+      
+      // Wait for initialization
+      if (!isInitialized) {
+        return;
+      }
+      
+      const conversationId = conversationIdInput.value.trim();
+      if (!conversationId) {
+        pollingText.textContent = 'No conversation ID';
+        return;
+      }
+      
+      // Fetch latest conversation
+      const data = await fetchActivity();
+      if (!data) {
+        pollingText.textContent = 'Error fetching data. Retrying...';
+        return;
+      }
+      
+      // Check conversation object first (most reliable)
+      let currentActivityId = null;
+      let currentTimestamp = null;
+      
+      if (data.conversation) {
+        const conv = data.conversation;
+        currentActivityId = conv.lastActivityId;
+        if (conv.lastActivityAt) {
+          currentTimestamp = new Date(conv.lastActivityAt).getTime();
+        }
+      }
+      
+      // Also check the latest activity in result array
+      if (data.result && data.result.length > 0) {
+        const latestActivity = data.result[0];
+        
+        // Prefer activity ID from result if available
+        if (latestActivity.id) {
+          currentActivityId = latestActivity.id;
+        }
+        
+        // Prefer activity timestamp if conversation timestamp not available
+        const activityTimestamp = latestActivity.createdAt || latestActivity.created_at || latestActivity.timestamp;
+        if (activityTimestamp && !currentTimestamp) {
+          currentTimestamp = new Date(activityTimestamp).getTime();
+        }
+      }
+      
+      // Check for new call using activity ID (most reliable)
+      const isNewActivityId = currentActivityId && lastActivityId && currentActivityId !== lastActivityId;
+      
+      // Also check timestamp as fallback (must be significantly newer - at least 5 seconds)
+      const isNewTimestamp = currentTimestamp && lastActivityTimestamp && 
+                             (currentTimestamp - lastActivityTimestamp > 5000);
+      
+      const isNewCall = isNewActivityId || isNewTimestamp;
+      
+      console.log('Polling check:', {
+        currentActivityId,
+        lastActivityId,
+        isNewActivityId,
+        currentTimestamp: currentTimestamp ? new Date(currentTimestamp).toISOString() : null,
+        lastActivityTimestamp: lastActivityTimestamp ? new Date(lastActivityTimestamp).toISOString() : null,
+        isNewTimestamp,
+        isNewCall,
+        pollCount
+      });
+      
+      if (isNewCall) {
+        // New call detected
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        
+        pollingIndicator.innerHTML = '✅';
+        pollingText.textContent = 'New call detected!';
+        resolutionButtons.style.display = 'block';
+        btnStopPolling.style.display = 'none';
+        
+        // Update stored values
+        if (currentActivityId) {
+          lastActivityId = currentActivityId;
+        }
+        if (currentTimestamp) {
+          lastActivityTimestamp = currentTimestamp;
+        }
+      } else {
+        pollingText.textContent = `Polling... (check #${pollCount})`;
+      }
+    } catch (error) {
+      console.error('Polling error:', error);
+      pollingText.textContent = `Error: ${error.message}`;
+      // Continue polling on error
+    }
+  }, 13000); // Poll every 13 seconds
+}
+
+// Stop polling
+btnStopPolling.addEventListener('click', () => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
+  }
+  pollingIndicator.innerHTML = '';
+  pollingText.textContent = '';
+  testingSection.style.display = 'none';
+  feedbackSection.style.display = 'none';
+  resolutionButtons.style.display = 'none';
+  currentJobId = null;
+  originalConversationData = null;
+  lastActivityTimestamp = null;
+  lastActivityId = null;
+});
+
+// Handle resolution feedback
+btnResolvedYes.addEventListener('click', () => {
+  showStatus('🎉 Great! Job is working correctly.', 'success');
+  testingSection.style.display = 'none';
+  feedbackSection.style.display = 'none';
+  resolutionButtons.style.display = 'none';
+  currentJobId = null;
+  originalConversationData = null;
+});
+
+btnResolvedNo.addEventListener('click', () => {
+  // Show feedback section
+  resolutionButtons.style.display = 'none';
+  feedbackSection.style.display = 'block';
+  feedbackText.value = ''; // Clear previous feedback
+  feedbackText.focus();
+});
+
+// Handle feedback submission
+btnSubmitFeedback.addEventListener('click', async () => {
+  if (!currentJobId) {
+    showStatus('Error: No job ID found', 'error');
+    return;
+  }
+  
+  const userFeedback = feedbackText.value.trim();
+  if (!userFeedback) {
+    showStatus('Please provide feedback about what went wrong', 'error');
+    return;
+  }
+  
+  try {
+    showStatus('Analyzing failure with your feedback...', 'loading');
+    setButtonsEnabled(false);
+    btnSubmitFeedback.disabled = true;
+    
+    // Fetch the latest conversation (the failed one)
+    const latestData = await fetchActivity();
+    if (!latestData) {
+      throw new Error('Failed to fetch latest conversation');
+    }
+    
+    // Get OpenAI API key
+    const stored = await chrome.storage.local.get(['openaiApiKey']);
+    const openaiApiKey = stored.openaiApiKey;
+    
+    if (!openaiApiKey || !openaiApiKey.trim()) {
+      throw new Error('OpenAI API key not found');
+    }
+    
+    // Call OpenAI with failure analysis prompt including user feedback
+    const failurePrompt = `The Job failed and it didn't work.
+
+USER FEEDBACK (Problems & Solutions):
+${userFeedback}
+
+CALL TRANSCRIPT:
+${JSON.stringify(latestData, null, 2)}
+
+Based on the user's feedback about what went wrong and how it should be fixed, please identify the mistakes and shortcomings of our original job, and rebuild a new one that addresses these specific issues.
+
+Remember to return it in this format:
+
+- \`emoji\` (with a single character)
+- \`instructions\` (Markdown, with line breaks. Describe how Sona should navigate this job, as if you're guiding a real person. Use clear, step-by-step language). 
+- \`name\` (which will be a basic string)
+- \`trigger\` (which will be a string)
+- The \`description\` can contain line breaks, so use \\n to return.
+
+Return only JSON.`;
+
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey.trim()}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: failurePrompt
+          }
+        ],
+        temperature: 0.7,
+        response_format: { type: 'json_object' }
+      })
+    });
+    
+    if (!openaiResponse.ok) {
+      const errorText = await openaiResponse.text();
+      throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText.substring(0, 100)}`);
+    }
+    
+    const openaiData = await openaiResponse.json();
+    const openaiContent = openaiData.choices?.[0]?.message?.content;
+    
+    if (!openaiContent) {
+      throw new Error('No content returned from OpenAI');
+    }
+    
+    // Parse OpenAI JSON response
+    let updatedJobBody;
+    try {
+      updatedJobBody = JSON.parse(openaiContent);
+    } catch (e) {
+      const jsonMatch = openaiContent.match(/```json\s*([\s\S]*?)\s*```/) || openaiContent.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        updatedJobBody = JSON.parse(jsonMatch[1]);
+      } else {
+        throw new Error('Could not parse JSON from OpenAI response');
+      }
+    }
+    
+    // Validate required fields
+    if (!updatedJobBody.emoji || !updatedJobBody.name || !updatedJobBody.trigger || !updatedJobBody.instructions) {
+      throw new Error('OpenAI response missing required fields');
+    }
+    
+    if (!updatedJobBody.description) {
+      updatedJobBody.description = '';
+    }
+    
+    // Add the job ID to the body for PUT request
+    updatedJobBody.id = currentJobId;
+    
+    // Show OpenAI response
+    showResponse(openaiData, 'OpenAI Updated Job');
+    
+    // Update the job using PUT request
+    showStatus('Updating job...', 'loading');
+    
+    const authToken = authTokenInput.value.trim();
+    const url = `https://ai.openphoneapi.com/v1/agent-job-definitions/${currentJobId}`;
+    const headers = getDynamicHeaders(authToken);
+    
+    const updateResponse = await fetch(url, {
+      method: 'PUT',
+      headers: headers,
+      body: JSON.stringify(updatedJobBody)
+    });
+    
+    if (!updateResponse.ok) {
+      const errorText = await updateResponse.text();
+      throw new Error(`Update failed: ${updateResponse.status} - ${errorText.substring(0, 100)}`);
+    }
+    
+    const updatedJobData = await updateResponse.json();
+    
+    showStatus('✅ Job updated! Test again by calling.', 'success');
+    showResponse(updatedJobData, 'Updated Job');
+    
+    // Hide feedback section and reset for new test
+    feedbackSection.style.display = 'none';
+    pollingIndicator.innerHTML = '<span class="polling-dot"></span>';
+    pollingText.textContent = 'Waiting for you to call again...';
+    btnStopPolling.style.display = 'block';
+    lastActivityTimestamp = null; // Reset to detect new calls
+    lastActivityId = null; // Reset to detect new calls
+    startPolling();
+    
+  } catch (error) {
+    console.error('Update job error:', error);
+    showStatus(`❌ Error: ${error.message}`, 'error');
+    showResponse({ error: error.message }, 'Update Error');
+  } finally {
+    setButtonsEnabled(true);
+    btnSubmitFeedback.disabled = false;
+  }
+});
 
 // Listen for token updates from background script (network interception)
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -359,7 +759,7 @@ btnDownload.addEventListener('click', async () => {
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const conversationId = conversationIdInput.value.trim();
-    const filename = `openphone-activity-${conversationId}-${timestamp}.json`;
+    const filename = `quo-activity-${conversationId}-${timestamp}.json`;
     
     // Send message to background script to handle download
     chrome.runtime.sendMessage({
@@ -615,6 +1015,77 @@ Return only valid JSON. Do not include any markdown code blocks or extra text. T
     
     // Show job creation response
     showResponse(jobData, 'Job Created');
+    
+    // Store job ID and original conversation for testing
+    currentJobId = jobId;
+    originalConversationData = conversationData;
+    
+    // TEMPORARY SOLUTION: Activate and publish the job via UI interaction
+    // TODO: This is a workaround because the created job is not "ON" by default.
+    // We should investigate pushing the proper HTTP packet instead of DOM manipulation.
+    // For now, we'll click the toggle and publish buttons programmatically.
+    try {
+      showStatus('Activating and publishing job...', 'loading');
+      
+      // Get the job name for the dynamic aria-label
+      const jobName = jobData.name || jobBody.name || 'Unknown Job';
+      
+      // Query for my.quo.com tabs specifically (not just active tab)
+      const tabs = await chrome.tabs.query({ url: 'https://my.quo.com/*' });
+      if (tabs.length === 0) {
+        console.warn('No my.quo.com tab found to activate job');
+        showStatus('Please open my.quo.com to activate the job', 'error');
+      } else {
+        const tab = tabs[0]; // Use the first my.quo.com tab found
+        
+        // Execute script in the page to click the toggle and publish buttons
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (jobName) => {
+            return new Promise((resolve) => {
+              // Find and click the toggle button using the dynamic job name
+              const toggleSelector = `[aria-label="Toggle ${jobName}"]`;
+              const toggleButton = document.querySelector(toggleSelector);
+              if (toggleButton) {
+                toggleButton.click();
+                console.log('Clicked toggle button for:', jobName);
+                
+                // Wait a moment for the UI to update, then click publish
+                setTimeout(() => {
+                  const publishButtons = document.querySelectorAll('[aria-labelledby="workflow-status-banner-message"] button');
+                  if (publishButtons.length > 1) {
+                    publishButtons[1].click();
+                    console.log('Clicked publish button');
+                    resolve({ success: true, message: 'Activated and published' });
+                  } else {
+                    console.warn('Publish button not found');
+                    resolve({ success: false, message: 'Publish button not found' });
+                  }
+                }, 500);
+              } else {
+                console.warn('Toggle button not found for:', jobName);
+                resolve({ success: false, message: `Toggle button not found for: ${jobName}` });
+              }
+            });
+          },
+          args: [jobName]
+        });
+        
+        const result = results[0]?.result;
+        if (result?.success) {
+          console.log('Job activation and publish script executed:', result.message);
+        } else {
+          console.warn('Job activation failed:', result?.message);
+        }
+      }
+    } catch (activationError) {
+      console.error('Error activating job:', activationError);
+      // Don't fail the entire flow if activation fails
+      showStatus('Job created but failed to auto-activate. Please activate manually.', 'error');
+    }
+    
+    // Start testing flow
+    startTestingFlow(conversationIdInput.value.trim());
     
     // Log full response for debugging
     console.log('Job created:', jobData);
